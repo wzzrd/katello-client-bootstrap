@@ -1087,6 +1087,11 @@ if __name__ == '__main__':
             hostgroup_id = return_matching_foreman_key('hostgroups', 'title="%s"' % options.hostgroup, 'id', False)
             jdata = json.loads('{"host": {"hostgroup_id": "%s"}}' % hostgroup_id)
             put_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/api/hosts/%s" % host_id, jdata)
+        if options.location:
+            print_running("Calling Foreman API to switch location for %s to %s" % (FQDN, options.location))
+            location_id = return_matching_foreman_key('locations', 'title="%s"' % options.location, 'id', False)
+            jdata = json.loads('{"host": {"location_id": "%s"}}' % location_id)
+            put_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/api/hosts/%s" % host_id, jdata)
 
         if 'foreman' not in options.skip and 'puppet' not in options.skip:
             print_running("Calling Foreman API to update Puppet master and Puppet CA for %s" % FQDN)
