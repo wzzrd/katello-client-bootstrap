@@ -1108,7 +1108,7 @@ if __name__ == '__main__':
 
         enable_rhsmcertd()
 
-        if 'puppet' not in options.skip:
+	if 'puppet' not in options.skip and 'foreman' not in options.skip:
             print_running("Stopping the Puppet agent for configuration update")
             exec_service("puppet", "stop")
 
