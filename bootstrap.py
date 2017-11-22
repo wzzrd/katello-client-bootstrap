@@ -1100,6 +1100,8 @@ if __name__ == '__main__':
         if 'foreman' not in options.skip and 'Openscap' in capsule_features:
             print_running("Calling Foreman API to update OpenSCAP proxy for %s" % FQDN)
             update_host_capsule_mapping("openscap_proxy_id", capsule_id, host_id)
+	elif 'foreman' not in options.skip and 'Openscap' not in capsule_features:
+	    print_warning("New capsule doesn't have OpenSCAP capability, not switching / configuring openscap_proxy_id")
 
         print_running("Calling Foreman API to update content source for %s" % FQDN)
         update_host_capsule_mapping("content_source_id", capsule_id, host_id)
