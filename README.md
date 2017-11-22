@@ -188,11 +188,16 @@ There are times where it is necessary to migrate clients from one Foreman + Kate
 
 In order to manually balance the load over multiple Capsule servers, you might
 want to move some existing systems to newly deployed Capsules. You can easily
-do this by running the bootstrap.py script like so (assuming you also want to
-change the hostgroup and location):
+do this by running the bootstrap.py script like so:
 
 ~~~
-# # The --hostgroup and --location parameters are optional.
+# ./bootstrap.py -l admin --new-capsule  --server new.capsule.server
+~~~
+
+If you want to change the hostgroup and location of the system at the same
+time, run:
+
+~~~
 # ./bootstrap.py -l admin --new-capsule  --server new.capsule.server \
     --hostgroup mygroup --location mylocation
 ~~~
