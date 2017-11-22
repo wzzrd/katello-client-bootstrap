@@ -188,7 +188,8 @@ There are times where it is necessary to migrate clients from one Foreman + Kate
 
 In order to manually balance the load over multiple Capsule servers, you might
 want to move some existing systems to newly deployed Capsules. You can easily
-do this by running the bootstrap.py script like so:
+do this by running the bootstrap.py script like the examples below. Mind that
+you still have to manually revoke any Puppet certificates on the old capsules!
 
 ~~~
 # ./bootstrap.py -l admin --new-capsule  --server new.capsule.server

@@ -1130,6 +1130,7 @@ if __name__ == '__main__':
             print_generic("if auto-signing is disabled")
             exec_failexit("/usr/bin/puppet agent --test --noop --tags no_such_tag --waitforcert 10")
             print_generic("Puppet agent is not running; please start manually if required.")
+            print_generic("You also need to manually revoke the certificate on the old capsule.")
 
     else:
         # > ELSE get CA RPM, optionally create host,
