@@ -920,8 +920,8 @@ if __name__ == '__main__':
     #     if removing from foreman:
     #        foreman_fqdn
     if not ((options.remove and ('foreman' in options.skip or options.foreman_fqdn)) or
-               (options.foreman_fqdn and options.org and options.activationkey and ('foreman' in options.skip or options.hostgroup)) or
-               (options.foreman_fqdn and options.new_capsule)):
+            (options.foreman_fqdn and options.org and options.activationkey and ('foreman' in options.skip or options.hostgroup)) or
+            (options.foreman_fqdn and options.new_capsule)):
         if not options.remove and not options.new_capsule:
             print "Must specify server, login, organization, hostgroup and activation key.  See usage:"
         elif options.new_capsule:
