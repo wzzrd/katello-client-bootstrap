@@ -184,17 +184,18 @@ By default, bootstrap.py does not delete the system's profile from the legacy pl
 
 There are times where it is necessary to migrate clients from one Foreman + Katello installation to another. For instance, in lieu of upgrading an older Foreman + Katello installation, you choose to build a new installation in parallel. bootstrap.py can then be used to migrate clients from one Foreman + Katello installation to another. Simply provide the `--force` option, and bootstrap.py will remove the previous `katello-ca-consumer-*` package (from the old system), and will install the `katello-ca-consumer-*` package (from the new system), and continue registration as usual.
 
--### Migrating a system from one Satellite 6 / Capsule to another in the same infrastructure
--
--In order to manually balance the load over multiple Capsule servers, you might
--want to move some existing systems to newly deployed Capsules. You can easily
--do this by running the bootstrap.py script like so (assuming you also want to
-change the hostgroup):
--
--~~~
--# ./bootstrap.py -l admin --new-capsule  --server new.capsule.server \
-     --hostgroup mygroup
--~~~
+### Migrating a system from one Satellite 6 / Capsule to another in the same infrastructure
+
+In order to manually balance the load over multiple Capsule servers, you might
+want to move some existing systems to newly deployed Capsules. You can easily
+do this by running the bootstrap.py script like so (assuming you also want to
+change the hostgroup and location):
+
+~~~
+# # The --hostgroup and --location parameters are optional.
+# ./bootstrap.py -l admin --new-capsule  --server new.capsule.server \
+    --hostgroup mygroup --location mylocation
+~~~
 
 ### Enabling additional repositories at registration time.
 
