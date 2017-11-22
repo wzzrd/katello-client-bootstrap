@@ -223,7 +223,9 @@ def get_bootstrap_rpm(clean=False, unreg=True):
     Retrieve Client CA Certificate RPMs from the Satellite 6 server.
     Uses --insecure options to curl(1) if instructed to download via HTTPS
     This function is usually called with clean=options.force, which ensures
-    clean_katello_agent() is called if --force is specified.
+    clean_katello_agent() is called if --force is specified. You can optionally
+    pass unreg=False to bypass unregistering a system (e.g. when moving between 
+    capsules.
     """
     if clean:
         clean_katello_agent()
@@ -1068,20 +1070,21 @@ if __name__ == '__main__':
         # > ELIF new_capsule and foreman_fqdn set, will migrate to other capsule
         #
         # > will replace CA certificate, reinstall katello-agent, gofer
-        # > update system definition to point to new capsule for content,
-        # > Puppet, OpenSCAP and update Puppet configuration
+        # > will optionally update hostgroup and location
+        # > wil update system definition to point to new capsule for content,
+        # > Puppet, OpenSCAP and update Puppet configuration (if applicable)
         # > MANUAL SIGNING OF CSR OR MANUALLY CREATING AUTO-SIGN RULE STILL REQUIRED!
-        # > API doesn't have a public provision for creating auto-sign entries yet!
+        # > API doesn't have a public endpoint for creating auto-sign entries yet!
 
-        # orig starts here
+        # Make system ready for switch, gather required data
         get_bootstrap_rpm(clean=True, unreg=False)
         install_katello_agent()
         API_PORT = get_api_port()
-
         capsule_id = return_matching_foreman_key('smart_proxies', 'name="%s"' % options.foreman_fqdn, 'id', False)
         host_id = return_matching_foreman_key('hosts', 'name="%s"' % FQDN, 'id', False)
         capsule_features = [ f['name'] for f in get_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/katello/api/capsules/%s" % capsule_id)['features'] ]
 
+        # Optionally configure new hostgroup, location
         if options.hostgroup:
             print_running("Calling Foreman API to switch hostgroup for %s to %s" % (FQDN, options.hostgroup))
             hostgroup_id = return_matching_foreman_key('hostgroups', 'title="%s"' % options.hostgroup, 'id', False)
@@ -1093,17 +1096,18 @@ if __name__ == '__main__':
             jdata = json.loads('{"host": {"location_id": "%s"}}' % location_id)
             put_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/api/hosts/%s" % host_id, jdata)
 
+        # Configure new proxy_id for Puppet (if not skipped), and OpenSCAP (if available and not skipped)
         if 'foreman' not in options.skip and 'puppet' not in options.skip:
-            print_running("Calling Foreman API to update Puppet master and Puppet CA for %s" % FQDN)
+            print_running("Calling Foreman API to update Puppet master and Puppet CA for %s to %s" % (FQDN, options.foreman_fqdn))
             update_host_capsule_mapping("puppet_proxy_id", capsule_id, host_id)
             update_host_capsule_mapping("puppet_ca_proxy_id", capsule_id, host_id)
         if 'foreman' not in options.skip and 'Openscap' in capsule_features:
-            print_running("Calling Foreman API to update OpenSCAP proxy for %s" % FQDN)
+            print_running("Calling Foreman API to update OpenSCAP proxy for %s to %s" % (FQDN, options.foreman_fqdn))
             update_host_capsule_mapping("openscap_proxy_id", capsule_id, host_id)
 	elif 'foreman' not in options.skip and 'Openscap' not in capsule_features:
 	    print_warning("New capsule doesn't have OpenSCAP capability, not switching / configuring openscap_proxy_id")
 
-        print_running("Calling Foreman API to update content source for %s" % FQDN)
+        print_running("Calling Foreman API to update content source for %s to %s" % (FQDN, options.foreman_fqdn))
         update_host_capsule_mapping("content_source_id", capsule_id, host_id)
 
         enable_rhsmcertd()
