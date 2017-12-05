@@ -1066,7 +1066,7 @@ if __name__ == '__main__':
         migrate_systems(options.org, options.activationkey)
         if options.enablerepos:
             enable_repos()
-    elif options.new_capsule and options.foreman_fqdn:
+    elif options.new_capsule:
         # > ELIF new_capsule and foreman_fqdn set, will migrate to other capsule
         #
         # > will replace CA certificate, reinstall katello-agent, gofer
