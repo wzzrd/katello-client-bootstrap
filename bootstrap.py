@@ -544,6 +544,11 @@ def update_host_capsule_mapping(attribute, capsule_id, host_id):
     return put_json(url, jdata)
 
 
+def get_capsule_features(capsule_id):
+    url = "https://" + options.foreman_fqdn + ":" + str(API_PORT) + "/katello/api/capsules/%s" % str(capsule_id)
+    return [f['name'] for f in get_json(url)['features']]
+
+
 def return_matching_foreman_key(api_name, search_key, return_key, null_result_ok=False):
     """
     Function uses `return_matching_key` to make an API call to Foreman.
@@ -1082,7 +1087,7 @@ if __name__ == '__main__':
         API_PORT = get_api_port()
         capsule_id = return_matching_foreman_key('smart_proxies', 'name="%s"' % options.foreman_fqdn, 'id', False)
         host_id = return_matching_foreman_key('hosts', 'name="%s"' % FQDN, 'id', False)
-        capsule_features = [f['name'] for f in get_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/katello/api/capsules/%s" % capsule_id)['features']]
+        capsule_features = get_capsule_features(capsule_id)
 
         # Optionally configure new hostgroup, location
         if options.hostgroup:
