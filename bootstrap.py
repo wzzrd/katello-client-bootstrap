@@ -407,13 +407,17 @@ server          = %s
         puppet_conf.write("""noop            = true
 """)
     puppet_conf.close()
+    noop_puppet_signing_run()
+    if 'puppet-enable' not in options.skip:
+        enable_service("puppet")
+        exec_service("puppet", "restart")
+
+
+def noop_puppet_signing_run():
     print_generic("Running Puppet in noop mode to generate SSL certs")
     print_generic("Visit the UI and approve this certificate via Infrastructure->Capsules")
     print_generic("if auto-signing is disabled")
     exec_failexit("/usr/bin/puppet agent --test --noop --tags no_such_tag --waitforcert 10")
-    if 'puppet-enable' not in options.skip:
-        enable_service("puppet")
-        exec_service("puppet", "restart")
 
 
 def remove_obsolete_packages():
@@ -1133,10 +1137,7 @@ if __name__ == '__main__':
             delete_directory("/var/lib/puppet/ssl")
             delete_file("/var/lib/puppet/client_data/catalog/%s.json" % FQDN)
 
-            print_generic("Running Puppet in noop mode to generate SSL certs")
-            print_generic("Visit the UI and approve this certificate via Infrastructure->Capsules")
-            print_generic("if auto-signing is disabled")
-            exec_failexit("/usr/bin/puppet agent --test --noop --tags no_such_tag --waitforcert 10")
+            noop_puppet_signing_run()
             print_generic("Puppet agent is not running; please start manually if required.")
             print_generic("You also need to manually revoke the certificate on the old capsule.")
 
