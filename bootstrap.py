@@ -549,6 +549,13 @@ def get_capsule_features(capsule_id):
     return [f['name'] for f in get_json(url)['features']]
 
 
+def update_host_config(attribute, value, host_id):
+    attribute_id = return_matching_foreman_key(attribute, 'title="%s"' % value, 'id', False)
+    json_key = attribute + "_id"
+    jdata = json.loads('{"host": {"%s": "%s"}}' % (json_key, attribute_id))
+    put_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/api/hosts/%s" % host_id, jdata)
+
+
 def return_matching_foreman_key(api_name, search_key, return_key, null_result_ok=False):
     """
     Function uses `return_matching_key` to make an API call to Foreman.
@@ -1092,14 +1099,10 @@ if __name__ == '__main__':
         # Optionally configure new hostgroup, location
         if options.hostgroup:
             print_running("Calling Foreman API to switch hostgroup for %s to %s" % (FQDN, options.hostgroup))
-            hostgroup_id = return_matching_foreman_key('hostgroups', 'title="%s"' % options.hostgroup, 'id', False)
-            jdata = json.loads('{"host": {"hostgroup_id": "%s"}}' % hostgroup_id)
-            put_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/api/hosts/%s" % host_id, jdata)
+            update_host_config('hostgroup', options.hostgroup, host_id)
         if options.location:
             print_running("Calling Foreman API to switch location for %s to %s" % (FQDN, options.location))
-            location_id = return_matching_foreman_key('locations', 'title="%s"' % options.location, 'id', False)
-            jdata = json.loads('{"host": {"location_id": "%s"}}' % location_id)
-            put_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/api/hosts/%s" % host_id, jdata)
+            update_host_config('location', options.location, host_id)
 
         # Configure new proxy_id for Puppet (if not skipped), and OpenSCAP (if available and not skipped)
         if 'foreman' not in options.skip and 'puppet' not in options.skip:
