@@ -554,7 +554,7 @@ def get_capsule_features(capsule_id):
 
 
 def update_host_config(attribute, value, host_id):
-    attribute_id = return_matching_foreman_key(attribute, 'title="%s"' % value, 'id', False)
+    attribute_id = return_matching_foreman_key(attribute + 's', 'title="%s"' % value, 'id', False)
     json_key = attribute + "_id"
     jdata = json.loads('{"host": {"%s": "%s"}}' % (json_key, attribute_id))
     put_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/api/hosts/%s" % host_id, jdata)
