@@ -192,14 +192,14 @@ do this by running the bootstrap.py script like the examples below. Mind that
 you still have to manually revoke any Puppet certificates on the old capsules!
 
 ~~~
-# ./bootstrap.py -l admin --new-capsule  --server new.capsule.server
+# ./bootstrap.py -l admin --new-capsule --server new.capsule.server
 ~~~
 
 If you want to change the hostgroup and location of the system at the same
 time, run:
 
 ~~~
-# ./bootstrap.py -l admin --new-capsule  --server new.capsule.server \
+# ./bootstrap.py -l admin --new-capsule --server new.capsule.server \
     --hostgroup mygroup --location mylocation
 ~~~
 
