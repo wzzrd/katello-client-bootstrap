@@ -273,6 +273,16 @@ def enable_rhsmcertd():
     exec_service("rhsmcertd", "restart")
 
 
+def is_registered():
+    # Check if all required certificates are in place (i.e. a system is
+    # registered to begin with) before we start changing things
+    if (os.path.exists('/etc/rhsm/ca/katello-server-ca.pem') and
+            os.path.exists('/etc/pki/consumer/cert.pem')):
+        return True
+    else:
+        return False
+
+
 def migrate_systems(org_name, activationkey):
     """
     Call `rhn-migrate-classic-to-rhsm` to migrate the machine from Satellite
@@ -1091,6 +1101,9 @@ if __name__ == '__main__':
         # > Puppet, OpenSCAP and update Puppet configuration (if applicable)
         # > MANUAL SIGNING OF CSR OR MANUALLY CREATING AUTO-SIGN RULE STILL REQUIRED!
         # > API doesn't have a public endpoint for creating auto-sign entries yet!
+        if not is_registered():
+            print_error("This system doesn't seem to be registered to a Capsule at this moment.")
+            sys.exit(1)
 
         # Make system ready for switch, gather required data
         get_bootstrap_rpm(clean=True, unreg=False)
