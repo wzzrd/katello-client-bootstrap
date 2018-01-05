@@ -7,8 +7,8 @@ bootstrap Script for migrating existing running systems to Foreman with the Kate
 This script can take a system that is registered to Spacewalk, Satellite 5, Red Hat
 Network Classic and get it registered to Foreman & Katello.
 
-Optionally, you can also move systems from one Satellite 6 system or Capsule to
-another by using the --new-capsule option.
+Optionally, you can also move systems between Capsules (both internal and
+external) of one Katello installation by using the `--new-capsule` option.
 
 # What does the Script do?
 
