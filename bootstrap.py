@@ -1106,6 +1106,7 @@ if __name__ == '__main__':
             sys.exit(1)
 
         # Make system ready for switch, gather required data
+        install_prereqs()
         get_bootstrap_rpm(clean=True, unreg=False)
         install_katello_agent()
         API_PORT = get_api_port()
