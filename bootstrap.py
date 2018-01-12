@@ -276,11 +276,8 @@ def enable_rhsmcertd():
 def is_registered():
     # Check if all required certificates are in place (i.e. a system is
     # registered to begin with) before we start changing things
-    if (os.path.exists('/etc/rhsm/ca/katello-server-ca.pem') and
-            os.path.exists('/etc/pki/consumer/cert.pem')):
-        return True
-    else:
-        return False
+    return os.path.exists('/etc/rhsm/ca/katello-server-ca.pem') and
+            os.path.exists('/etc/pki/consumer/cert.pem')
 
 
 def migrate_systems(org_name, activationkey):
