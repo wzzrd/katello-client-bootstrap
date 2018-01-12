@@ -276,8 +276,8 @@ def enable_rhsmcertd():
 def is_registered():
     # Check if all required certificates are in place (i.e. a system is
     # registered to begin with) before we start changing things
-    return os.path.exists('/etc/rhsm/ca/katello-server-ca.pem') and
-            os.path.exists('/etc/pki/consumer/cert.pem')
+    return (os.path.exists('/etc/rhsm/ca/katello-server-ca.pem') and
+            os.path.exists('/etc/pki/consumer/cert.pem'))
 
 
 def migrate_systems(org_name, activationkey):
@@ -551,7 +551,10 @@ def put_json(url, jdata=None):
 
 def update_host_capsule_mapping(attribute, capsule_id, host_id):
     url = "https://" + options.foreman_fqdn + ":" + str(API_PORT) + "/api/v2/hosts/" + str(host_id)
-    jdata = json.loads('{"host": {"%s": "%s"}}' % (attribute, capsule_id))
+    if attribute == 'content_source_id':
+        jdata = json.loads('{"host": {"content_facet_attributes": {"content_source_id": "%s"}, "content_source_id": "%s"}}' % (capsule_id, capsule_id))
+    else:
+        jdata = json.loads('{"host": {"%s": "%s"}}' % (attribute, capsule_id))
     return put_json(url, jdata)
 
 
