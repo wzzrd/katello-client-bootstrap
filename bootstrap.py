@@ -218,6 +218,35 @@ def install_prereqs():
         delete_file('/etc/yum.repos.d/katello-client-bootstrap-deps.repo')
 
 
+def get_puppet_path():
+    """
+    Get the path of where the puppet excutable is located.
+    """
+    puppet_major_version = get_puppet_version()
+
+    if puppet_major_version == 3:
+        return '/usr/bin/puppet'
+    elif puppet_major_version in [4, 5]:
+        return '/opt/puppetlabs/puppet/bin/puppet'
+    else:
+        print_error("Cannot find puppet path. Is it installed?")
+        sys.exit(1)
+
+
+def get_puppet_version():
+    """
+    Retrieve the Major version of puppet install.
+    """
+    ts = rpm.TransactionSet()
+    for name in ['puppet', 'puppet-agent']:
+        mi = ts.dbMatch('name', name)
+        for h in mi:
+            puppet_version = int(h['version'].split('.')[0])
+            if h['name'] == 'puppet-agent' and puppet_version == 1:
+                puppet_version = 4
+            return puppet_version
+
+
 def get_bootstrap_rpm(clean=False, unreg=True):
     """
     Retrieve Client CA Certificate RPMs from the Satellite 6 server.
@@ -363,6 +392,8 @@ def clean_puppet():
     print_generic("Cleaning old Puppet Agent")
     call_yum("erase", "puppet")
     delete_directory("/var/lib/puppet/")
+    delete_directory("/opt/puppetlabs/puppet/cache")
+    delete_directory("/etc/puppetlabs/puppet/ssl")
 
 
 def clean_environment():
@@ -393,13 +424,29 @@ def install_puppet_agent():
     call_yum("install", "puppet")
     enable_service("puppet")
 
-    puppet_conf = open('/etc/puppet/puppet.conf', 'wb')
-    puppet_conf.write("""
-[main]
+    puppet_major_version = get_puppet_version()
+    if puppet_major_version == 3:
+        puppet_conf_file = '/etc/puppet/puppet.conf'
+        main_section = """[main]
 vardir = /var/lib/puppet
 logdir = /var/log/puppet
 rundir = /var/run/puppet
 ssldir = $vardir/ssl
+"""
+    elif puppet_major_version in [4, 5]:
+        puppet_conf_file = '/etc/puppetlabs/puppet/puppet.conf'
+        main_section = """[main]
+vardir = /opt/puppetlabs/puppet/cache
+logdir = /var/log/puppetlabs/puppet
+rundir = /var/run/puppetlabs
+ssldir = /etc/puppetlabs/puppet/ssl
+"""
+    else:
+        print_error("Unsupported puppet version")
+        sys.exit(1)
+    puppet_conf = open(puppet_conf_file, 'wb')
+    puppet_conf.write("""
+%s
 [agent]
 pluginsync      = true
 report          = true
@@ -409,7 +456,7 @@ ca_server       = %s
 certname        = %s
 environment     = %s
 server          = %s
-""" % (options.foreman_fqdn, FQDN, puppet_env, options.foreman_fqdn))
+""" % (main_section, options.foreman_fqdn, FQDN, puppet_env, options.foreman_fqdn))
     if options.puppet_noop:
         puppet_conf.write("""noop            = true
 """)
@@ -424,7 +471,10 @@ def noop_puppet_signing_run():
     print_generic("Running Puppet in noop mode to generate SSL certs")
     print_generic("Visit the UI and approve this certificate via Infrastructure->Capsules")
     print_generic("if auto-signing is disabled")
-    exec_failexit("/usr/bin/puppet agent --test --noop --tags no_such_tag --waitforcert 10")
+    exec_failexit("%s agent --test --noop --tags no_such_tag --waitforcert 10" % (get_puppet_path()))
+    if 'puppet-enable' not in options.skip:
+        enable_service("puppet")
+        exec_service("puppet", "restart")
 
 
 def remove_obsolete_packages():
@@ -521,7 +571,7 @@ def call_api(url, data=None, method='GET'):
         try:
             jsonerr = json.load(e)
             print 'error: %s' % json.dumps(jsonerr, sort_keys=False, indent=2)
-        except:
+        except:  # noqa: E722
             print 'error: %s' % e
         sys.exit(1)
     except Exception, e:
@@ -747,7 +797,7 @@ def get_api_port():
     configparser.read('/etc/rhsm/rhsm.conf')
     try:
         return configparser.get('server', 'port')
-    except:
+    except:  # noqa: E722
         return "443"
 
 
@@ -975,7 +1025,8 @@ if __name__ == '__main__':
         print "This can lead to Puppet missbehaviour and thus the script will terminate now."
         print "You can override this by passing one of the following"
         print "\t--force - to disable all checking"
-        print "\t--skip-puppet - to omit installing the puppet agent"
+        print "\t--skip puppet - to omit installing the puppet agent"
+        print "\t--fqdn <FQDN> - to set an explicit FQDN, overriding detected FQDN"
         sys.exit(1)
 
     # > Gather primary IP address if none was given
@@ -987,7 +1038,7 @@ if __name__ == '__main__':
             s.connect((options.foreman_fqdn, 80))
             options.ip = s.getsockname()[0]
             s.close()
-        except:
+        except:  # noqa: E722
             options.ip = None
 
     # > Ask for the password if not given as option
