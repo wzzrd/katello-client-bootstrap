@@ -1210,8 +1210,8 @@ if __name__ == '__main__':
             # that would nuke custom /etc/puppet/puppet.conf files, which might
             # yield undesirable results.
             print_running("Updating Puppet configuration")
-            exec_failexit("sed -i 's/^[[:space:]]*server.*/   server     = %s/' %s" % (options.foreman_fqdn, puppet_conf_file))
-            exec_failok("sed -i 's/^[[:space:]]*ca_server.*/   server     = %s/' %s" % (options.foreman_fqdn, puppet_conf_file))  # For RHEL5 stock puppet.conf
+            exec_failexit("sed -i '/^[[:space:]]*server.*/ s/=.*/= %s/' %s" % (options.foreman_fqdn, puppet_conf_file))
+            exec_failok("sed -i '/^[[:space:]]*ca_server.*/ s/=.*/= %s/' %s" % (options.foreman_fqdn, puppet_conf_file))  # For RHEL5 stock puppet.conf
             delete_directory(ssl_dir)
             delete_file("%s/client_data/catalog/%s.json" % (var_dir, FQDN))
 
