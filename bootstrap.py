@@ -1190,6 +1190,19 @@ if __name__ == '__main__':
         enable_rhsmcertd()
 
         if 'puppet' not in options.skip and 'foreman' not in options.skip:
+            puppet_major_version = get_puppet_version()
+            if puppet_major_version == 3:
+                puppet_conf_file = '/etc/puppet/puppet.conf'
+                var_dir = '/var/lib/puppet'
+                ssl_dir = '/var/lib/puppet/ssl'
+            elif puppet_major_version in [4, 5]:
+                puppet_conf_file = '/etc/puppetlabs/puppet/puppet.conf'
+                var_dir = '/opt/puppetlabs/puppet/cache'
+                ssl_dir = '/etc/puppetlabs/puppet/ssl'
+            else:
+                print_error("Unsupported puppet version")
+                sys.exit(1)
+
             print_running("Stopping the Puppet agent for configuration update")
             exec_service("puppet", "stop")
 
@@ -1197,10 +1210,10 @@ if __name__ == '__main__':
             # that would nuke custom /etc/puppet/puppet.conf files, which might
             # yield undesirable results.
             print_running("Updating Puppet configuration")
-            exec_failexit("sed -i 's/^[[:space:]]*server.*/   server     = %s/' /etc/puppet/puppet.conf" % options.foreman_fqdn)
-            exec_failok("sed -i 's/^[[:space:]]*ca_server.*/   server     = %s/' /etc/puppet/puppet.conf" % options.foreman_fqdn)  # For RHEL5 stock puppet.conf
-            delete_directory("/var/lib/puppet/ssl")
-            delete_file("/var/lib/puppet/client_data/catalog/%s.json" % FQDN)
+            exec_failexit("sed -i 's/^[[:space:]]*server.*/   server     = %s/' %s" % (options.foreman_fqdn, puppet_conf_file))
+            exec_failok("sed -i 's/^[[:space:]]*ca_server.*/   server     = %s/' %s" % (options.foreman_fqdn, puppet_conf_file))  # For RHEL5 stock puppet.conf
+            delete_directory(ssl_dir)
+            delete_file("%s/client_data/catalog/%s.json" % (var_dir, FQDN))
 
             noop_puppet_signing_run()
             print_generic("Puppet agent is not running; please start manually if required.")
