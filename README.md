@@ -24,11 +24,11 @@ another by using the --new-capsule option.
 * Configuring the system with a proper Puppet configuration pointing at Foreman
 * Removing/disabling old RHN Classic packages/daemons (rhnsd, osad, etc)
 
-## System already registered to a Satellite 6 server / Capsule (--new-capsule)
+## System already registered to a Foreman + Katello server / Capsule (--new-capsule)
 * Clean the existing Katello agent installation
-* Install the Katello consumer RPM for the target Satellite 6 server / Capsule
+* Install the Katello consumer RPM for the target Foreman + Katello server / Capsule
 * Install the Katello agent software again, using the configuration for the
-  target Satellite 6 / Capsule server
+  target Foreman + Katello / Capsule server
 * Make API calls to switch the system to a different hostgroup (optional)
 * Make API calls to update the Puppet master, Puppet CA, content source and
   OpenSCAP proxy IDs (optional, except for content source)
@@ -184,7 +184,7 @@ By default, bootstrap.py does not delete the system's profile from the legacy pl
 
 There are times where it is necessary to migrate clients from one Foreman + Katello installation to another. For instance, in lieu of upgrading an older Foreman + Katello installation, you choose to build a new installation in parallel. bootstrap.py can then be used to migrate clients from one Foreman + Katello installation to another. Simply provide the `--force` option, and bootstrap.py will remove the previous `katello-ca-consumer-*` package (from the old system), and will install the `katello-ca-consumer-*` package (from the new system), and continue registration as usual.
 
-### Migrating a system from one Satellite 6 / Capsule to another in the same infrastructure
+### Migrating a system from one Foreman + Katello installation 6 or Capsule / to another in the same infrastructure
 
 In order to manually balance the load over multiple Capsule servers, you might
 want to move some existing systems to newly deployed Capsules. You can easily
@@ -192,14 +192,14 @@ do this by running the bootstrap.py script like the examples below. Mind that
 you still have to manually revoke any Puppet certificates on the old capsules!
 
 ~~~
-# ./bootstrap.py -l admin --new-capsule  --server new.capsule.server
+# ./bootstrap.py -l admin --new-capsule  --server capsule.example.com
 ~~~
 
 If you want to change the hostgroup and location of the system at the same
 time, run:
 
 ~~~
-# ./bootstrap.py -l admin --new-capsule  --server new.capsule.server \
+# ./bootstrap.py -l admin --new-capsule  --server capsule.example.com \
     --hostgroup mygroup --location mylocation
 ~~~
 
