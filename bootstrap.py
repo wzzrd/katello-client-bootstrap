@@ -218,6 +218,44 @@ def install_prereqs():
         delete_file('/etc/yum.repos.d/katello-client-bootstrap-deps.repo')
 
 
+def get_puppet_path():
+    """
+    Get the path of where the puppet excutable is located.
+    """
+    puppet_major_version = get_puppet_version()
+
+    if puppet_major_version == 3:
+        return '/usr/bin/puppet'
+    elif puppet_major_version in [4, 5]:
+        return '/opt/puppetlabs/puppet/bin/puppet'
+    else:
+        print_error("Cannot find puppet path. Is it installed?")
+        sys.exit(1)
+
+
+def get_puppet_version():
+    """
+    Retrieve the Major version of puppet install.
+    """
+    ts = rpm.TransactionSet()
+    for name in ['puppet', 'puppet-agent']:
+        mi = ts.dbMatch('name', name)
+        for h in mi:
+            puppet_version = int(h['version'].split('.')[0])
+            if h['name'] == 'puppet-agent' and puppet_version == 1:
+                puppet_version = 4
+            return puppet_version
+
+
+def is_fips():
+    """
+    Checks to see if the system is FIPS enabled.
+    """
+    fips_file = open("/proc/sys/crypto/fips_enabled", "r")
+    fips_status = fips_file.read(1)
+    return fips_status == "1"
+
+
 def get_bootstrap_rpm(clean=False, unreg=True):
     """
     Retrieve Client CA Certificate RPMs from the Satellite 6 server.
@@ -273,6 +311,13 @@ def enable_rhsmcertd():
     exec_service("rhsmcertd", "restart")
 
 
+def is_registered():
+    # Check if all required certificates are in place (i.e. a system is
+    # registered to begin with) before we start changing things
+    return (os.path.exists('/etc/rhsm/ca/katello-server-ca.pem') and
+            os.path.exists('/etc/pki/consumer/cert.pem'))
+
+
 def migrate_systems(org_name, activationkey):
     """
     Call `rhn-migrate-classic-to-rhsm` to migrate the machine from Satellite
@@ -297,6 +342,7 @@ def migrate_systems(org_name, activationkey):
         options.rhsmargs += " --legacy-user '%s' --legacy-password '%s'" % (options.legacy_login, options.legacy_password)
     else:
         options.rhsmargs += " --keep"
+    exec_failok("/usr/sbin/subscription-manager config --server.server_timeout=%s" % options.timeout)
     exec_failexit("/usr/sbin/rhn-migrate-classic-to-rhsm --org %s --activation-key '%s' %s" % (org_label, activationkey, options.rhsmargs))
     exec_failexit("subscription-manager config --rhsm.baseurl=https://%s/pulp/repos" % options.foreman_fqdn)
     if options.release:
@@ -325,6 +371,7 @@ def register_systems(org_name, activationkey):
         options.smargs += " --force"
     if options.release:
         options.smargs += " --release %s" % options.release
+    exec_failok("/usr/sbin/subscription-manager config --server.server_timeout=%s" % options.timeout)
     exec_failexit("/usr/sbin/subscription-manager register --org '%s' --name '%s' --activationkey '%s' %s" % (org_label, FQDN, activationkey, options.smargs))
     enable_rhsmcertd()
 
@@ -356,6 +403,8 @@ def clean_puppet():
     print_generic("Cleaning old Puppet Agent")
     call_yum("erase", "puppet")
     delete_directory("/var/lib/puppet/")
+    delete_directory("/opt/puppetlabs/puppet/cache")
+    delete_directory("/etc/puppetlabs/puppet/ssl")
 
 
 def clean_environment():
@@ -386,13 +435,32 @@ def install_puppet_agent():
     call_yum("install", "puppet")
     enable_service("puppet")
 
-    puppet_conf = open('/etc/puppet/puppet.conf', 'wb')
-    puppet_conf.write("""
-[main]
+    puppet_major_version = get_puppet_version()
+    if puppet_major_version == 3:
+        puppet_conf_file = '/etc/puppet/puppet.conf'
+        main_section = """[main]
 vardir = /var/lib/puppet
 logdir = /var/log/puppet
 rundir = /var/run/puppet
 ssldir = $vardir/ssl
+"""
+    elif puppet_major_version in [4, 5]:
+        puppet_conf_file = '/etc/puppetlabs/puppet/puppet.conf'
+        main_section = """[main]
+vardir = /opt/puppetlabs/puppet/cache
+logdir = /var/log/puppetlabs/puppet
+rundir = /var/run/puppetlabs
+ssldir = /etc/puppetlabs/puppet/ssl
+"""
+    else:
+        print_error("Unsupported puppet version")
+        sys.exit(1)
+    if is_fips():
+        main_section += "digest_algorithm = sha256"
+        print_generic("System is in FIPS mode. Setting digest_algorithm to SHA256 in puppet.conf")
+    puppet_conf = open(puppet_conf_file, 'wb')
+    puppet_conf.write("""
+%s
 [agent]
 pluginsync      = true
 report          = true
@@ -402,7 +470,7 @@ ca_server       = %s
 certname        = %s
 environment     = %s
 server          = %s
-""" % (options.foreman_fqdn, FQDN, puppet_env, options.foreman_fqdn))
+""" % (main_section, options.foreman_fqdn, FQDN, puppet_env, options.foreman_fqdn))
     if options.puppet_noop:
         puppet_conf.write("""noop            = true
 """)
@@ -417,13 +485,16 @@ def noop_puppet_signing_run():
     print_generic("Running Puppet in noop mode to generate SSL certs")
     print_generic("Visit the UI and approve this certificate via Infrastructure->Capsules")
     print_generic("if auto-signing is disabled")
-    exec_failexit("/usr/bin/puppet agent --test --noop --tags no_such_tag --waitforcert 10")
+    exec_failexit("%s agent --test --noop --tags no_such_tag --waitforcert 10" % (get_puppet_path()))
+    if 'puppet-enable' not in options.skip:
+        enable_service("puppet")
+        exec_service("puppet", "restart")
 
 
 def remove_obsolete_packages():
     """Remove old RHN packages"""
     print_generic("Removing old RHN packages")
-    call_yum("remove", "rhn-setup rhn-client-tools yum-rhn-plugin rhnsd rhn-check rhnlib spacewalk-abrt spacewalk-oscap osad 'rh-*-rhui-client'")
+    call_yum("remove", "rhn-setup rhn-client-tools yum-rhn-plugin rhnsd rhn-check rhnlib spacewalk-abrt spacewalk-oscap osad 'rh-*-rhui-client' 'candlepin-cert-consumer-*'")
 
 
 def fully_update_the_box():
@@ -446,7 +517,7 @@ def install_foreman_ssh_key():
         os.mkdir(foreman_ssh_dir, 0700)
         os.chown(foreman_ssh_dir, userpw.pw_uid, userpw.pw_gid)
     try:
-        foreman_ssh_key = urllib2.urlopen("https://%s:9090/ssh/pubkey" % options.foreman_fqdn).read()
+        foreman_ssh_key = urllib2.urlopen(("https://%s:9090/ssh/pubkey" % options.foreman_fqdn).read(), timeout=options.timeout)
     except urllib2.HTTPError, e:
         print_generic("The server was unable to fulfill the request. Error: %s - %s" % (e.code, e.reason))
         print_generic("Please ensure the Remote Execution feature is configured properly")
@@ -499,7 +570,7 @@ def call_api(url, data=None, method='GET'):
         if data:
             request.add_data(json.dumps(data))
         request.get_method = lambda: method
-        result = urllib2.urlopen(request)
+        result = urllib2.urlopen(request, timeout=options.timeout)
         jsonresult = json.load(result)
         if options.verbose:
             print 'result: %s' % json.dumps(jsonresult, sort_keys=False, indent=2)
@@ -514,7 +585,7 @@ def call_api(url, data=None, method='GET'):
         try:
             jsonerr = json.load(e)
             print 'error: %s' % json.dumps(jsonerr, sort_keys=False, indent=2)
-        except:
+        except:  # noqa: E722
             print 'error: %s' % e
         sys.exit(1)
     except Exception, e:
@@ -544,7 +615,10 @@ def put_json(url, jdata=None):
 
 def update_host_capsule_mapping(attribute, capsule_id, host_id):
     url = "https://" + options.foreman_fqdn + ":" + str(API_PORT) + "/api/v2/hosts/" + str(host_id)
-    jdata = json.loads('{"host": {"%s": "%s"}}' % (attribute, capsule_id))
+    if attribute == 'content_source_id':
+        jdata = json.loads('{"host": {"content_facet_attributes": {"content_source_id": "%s"}, "content_source_id": "%s"}}' % (capsule_id, capsule_id))
+    else:
+        jdata = json.loads('{"host": {"%s": "%s"}}' % (attribute, capsule_id))
     return put_json(url, jdata)
 
 
@@ -554,7 +628,7 @@ def get_capsule_features(capsule_id):
 
 
 def update_host_config(attribute, value, host_id):
-    attribute_id = return_matching_foreman_key(attribute, 'title="%s"' % value, 'id', False)
+    attribute_id = return_matching_foreman_key(attribute + 's', 'title="%s"' % value, 'id', False)
     json_key = attribute + "_id"
     jdata = json.loads('{"host": {"%s": "%s"}}' % (json_key, attribute_id))
     put_json("https://" + options.foreman_fqdn + ":" + API_PORT + "/api/hosts/%s" % host_id, jdata)
@@ -737,7 +811,7 @@ def get_api_port():
     configparser.read('/etc/rhsm/rhsm.conf')
     try:
         return configparser.get('server', 'port')
-    except:
+    except:  # noqa: E722
         return "443"
 
 
@@ -913,6 +987,7 @@ if __name__ == '__main__':
     parser.add_option("--deps-repository-gpg-key", dest="deps_repository_gpg_key", help="GPG Key to the repository that contains the subscription-manager RPMs", default="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release")
     parser.add_option("--install-packages", dest="install_packages", help="List of packages to be additionally installed - comma separated", metavar="installpackages")
     parser.add_option("--new-capsule", dest="new_capsule", action="store_true", help="Switch the server to a new capsule for content and Puppet. Pass --server with the Capsule FQDN as well.")
+    parser.add_option("-t", "--timeout", dest="timeout", type="int", help="Timeout (in seconds) for API calls and subscription-manager registration. Defaults to %default", metavar="timeout", default=900)
     (options, args) = parser.parse_args()
 
     if options.no_foreman:
@@ -965,7 +1040,8 @@ if __name__ == '__main__':
         print "This can lead to Puppet missbehaviour and thus the script will terminate now."
         print "You can override this by passing one of the following"
         print "\t--force - to disable all checking"
-        print "\t--skip-puppet - to omit installing the puppet agent"
+        print "\t--skip puppet - to omit installing the puppet agent"
+        print "\t--fqdn <FQDN> - to set an explicit FQDN, overriding detected FQDN"
         sys.exit(1)
 
     # > Gather primary IP address if none was given
@@ -977,7 +1053,7 @@ if __name__ == '__main__':
             s.connect((options.foreman_fqdn, 80))
             options.ip = s.getsockname()[0]
             s.close()
-        except:
+        except:  # noqa: E722
             options.ip = None
 
     # > Ask for the password if not given as option
@@ -1017,6 +1093,7 @@ if __name__ == '__main__':
         print "LEGACY PASSWORD - %s" % options.legacy_password
         print "DOWNLOAD METHOD - %s" % options.download_method
         print "SKIP - %s" % options.skip
+        print "TIMEOUT - %s" % options.timeout
 
     # > Exit if the user isn't root.
     # Done here to allow an unprivileged user to run the script to see
@@ -1091,8 +1168,12 @@ if __name__ == '__main__':
         # > Puppet, OpenSCAP and update Puppet configuration (if applicable)
         # > MANUAL SIGNING OF CSR OR MANUALLY CREATING AUTO-SIGN RULE STILL REQUIRED!
         # > API doesn't have a public endpoint for creating auto-sign entries yet!
+        if not is_registered():
+            print_error("This system doesn't seem to be registered to a Capsule at this moment.")
+            sys.exit(1)
 
         # Make system ready for switch, gather required data
+        install_prereqs()
         get_bootstrap_rpm(clean=True, unreg=False)
         install_katello_agent()
         API_PORT = get_api_port()
@@ -1125,6 +1206,19 @@ if __name__ == '__main__':
         enable_rhsmcertd()
 
         if 'puppet' not in options.skip and 'foreman' not in options.skip:
+            puppet_major_version = get_puppet_version()
+            if puppet_major_version == 3:
+                puppet_conf_file = '/etc/puppet/puppet.conf'
+                var_dir = '/var/lib/puppet'
+                ssl_dir = '/var/lib/puppet/ssl'
+            elif puppet_major_version in [4, 5]:
+                puppet_conf_file = '/etc/puppetlabs/puppet/puppet.conf'
+                var_dir = '/opt/puppetlabs/puppet/cache'
+                ssl_dir = '/etc/puppetlabs/puppet/ssl'
+            else:
+                print_error("Unsupported puppet version")
+                sys.exit(1)
+
             print_running("Stopping the Puppet agent for configuration update")
             exec_service("puppet", "stop")
 
@@ -1132,10 +1226,10 @@ if __name__ == '__main__':
             # that would nuke custom /etc/puppet/puppet.conf files, which might
             # yield undesirable results.
             print_running("Updating Puppet configuration")
-            exec_failexit("sed -i 's/^[[:space:]]*server.*/   server     = %s/' /etc/puppet/puppet.conf" % options.foreman_fqdn)
-            exec_failok("sed -i 's/^[[:space:]]*ca_server.*/   server     = %s/' /etc/puppet/puppet.conf" % options.foreman_fqdn)  # For RHEL5 stock puppet.conf
-            delete_directory("/var/lib/puppet/ssl")
-            delete_file("/var/lib/puppet/client_data/catalog/%s.json" % FQDN)
+            exec_failexit("sed -i '/^[[:space:]]*server.*/ s/=.*/= %s/' %s" % (options.foreman_fqdn, puppet_conf_file))
+            exec_failok("sed -i '/^[[:space:]]*ca_server.*/ s/=.*/= %s/' %s" % (options.foreman_fqdn, puppet_conf_file))  # For RHEL5 stock puppet.conf
+            delete_directory(ssl_dir)
+            delete_file("%s/client_data/catalog/%s.json" % (var_dir, FQDN))
 
             noop_puppet_signing_run()
             print_generic("Puppet agent is not running; please start manually if required.")
